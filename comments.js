@@ -1,82 +1,90 @@
 //create web server
-var express = require('express');
-var app = express();
-var fs = require('fs');
-var bodyParser = require('body-parser');
-var urlencodedParser = bodyParser.urlencoded({extended: false});
-var mysql = require('mysql');
-//connect to mysql database
-var connection = mysql.createConnection({
-	host: 'localhost',
-	user: 'root',
-	password: 'root',
-	database: 'comments'
+const express = require('express');
+//create router
+const router = express.Router();
+//import comment model
+const Comment = require('../models/comment');
+//import user model
+const User = require('../models/user');
+
+//import passport
+const passport = require('passport');
+
+//import helper function
+const {ensureAuthenticated} = require('../helpers/auth');
+
+//create comment route
+router.get('/comments', ensureAuthenticated, (req, res) => {
+    Comment.find({user: req.user.id})
+        .populate('user')
+        .then(comments => {
+            res.render('comments/index', {
+                comments: comments
+            });
+        });
 });
 
-//connect to mysql database
-connection.connect(function(err) {
-	if(err) {
-		console.log('Error connecting to Db');
-		return;
-	}
-	console.log('Connection established');
+//add comment form
+router.get('/comments/add', ensureAuthenticated, (req, res) => {
+    res.render('comments/add');
 });
 
-//create table in mysql database
-connection.query('CREATE TABLE IF NOT EXISTS comments(id int NOT NULL AUTO_INCREMENT, name VARCHAR(255), comment VARCHAR(255), PRIMARY KEY(id))', function(err) {
-	if(err) throw err;
+//process add comment
+router.post('/comments', ensureAuthenticated, (req, res) => {
+    let errors = [];
+
+    if (!req.body.title) {
+        errors.push({text: 'Please add a title'});
+    }
+    if (!req.body.details) {
+        errors.push({text: 'Please add some details'});
+    }
+    if (errors.length > 0) {
+        res.render('comments/add', {
+            errors: errors,
+            title: req.body.title,
+            details: req.body.details
+        });
+    } else {
+        const newUser = {
+            title: req.body.title,
+            details: req.body.details,
+            user: req.user.id
+        };
+        new Comment(newUser)
+            .save()
+            .then(comment => {
+                req.flash('success_msg', 'Comment added');
+                res.redirect('/comments');
+            })
+    }
 });
 
-//create web server
-app.use(express.static('public'));
-app.get('/index.htm', function(req, res) {
-	res.sendFile(__dirname + "/" + "index.htm");
-})
+//edit comment form
+router.get('/comments/edit/:id', ensureAuthenticated, (req, res) => {
+    Comment.findOne({
+        _id: req.params.id
+    })
+        .then(comment => {
+            if (comment.user != req.user.id) {
+                req.flash('error_msg', 'Not authorized');
+                res.redirect('/comments');
+            } else {
+                res.render('comments/edit', {
+                    comment: comment
+                });
+            }
+        });
+});
 
-//post comment
-app.post('/process_post', urlencodedParser, function(req, res) {
-	var response = {
-		name: req.body.name,
-		comment: req.body.comment
-	};
-	console.log(response);
-	//insert comment into mysql database
-	connection.query('INSERT INTO comments SET ?', response, function(err, result) {
-		if(err) throw err;
-		console.log(result);
-	});
-	res.end(JSON.stringify(response));
-})
+//process edit comment
+router.put('/comments/:id', ensureAuthenticated, (req, res) => {
+    Comment.findOne({
+        _id: req.params.id
+    })
+        .then(comment => {
+            comment.title = req.body.title;
+            comment.details = req.body.details;
 
-//read comments from mysql database
-app.get('/comments', function(req, res) {
-	connection.query('SELECT * FROM comments', function(err, rows, fields) {
-		if(err) throw err;
-		console.log('The solution is: ', rows);
-		res.end(JSON.stringify(rows));
-	});
-})
-
-//delete comment from mysql database
-app.post('/delete_comment', urlencodedParser, function(req, res) {
-	var response = {
-		id: req.body.id
-	};
-	console.log(response);
-	//delete comment from mysql database
-	connection.query('DELETE FROM comments WHERE id = ?', response, function(err, result) {
-		if(err) throw err;
-		console.log(result);
-	});
-	res.end(JSON.stringify(response));
-})
-
-//update comment from mysql database
-app.post('/update_comment', urlencodedParser, function(req, res) {
-	var response = {
-		id: req.body.id,
-		comment: req.body.comment
-	};
-	console.log(response);
-	//update comment from mysql database
-	connection.query
+            comment.save()
+                .then(comment
