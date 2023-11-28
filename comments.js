@@ -1,77 +1,88 @@
 //create web server
+//create a web server
 var express = require('express');
 var app = express();
-var server = require('http').createServer(app);
-
-//setup socket.io
-var io = require('socket.io').listen(server);
-
-//setup mysql
-var mysql = require("mysql");
-var pool = mysql.createPool({
-    connectionLimit: 10,
-    host: "classmysql.engr.oregonstate.edu",
-    user: "cs290_koehlert",
-    password: "3306",
-    database: "cs290_koehlert"
-});
-
-//setup handlebars
-var handlebars = require('express-handlebars').create({defaultLayout: 'main'});
-app.engine('handlebars', handlebars.engine);
-app.set('view engine', 'handlebars');
-
-//setup body-parser
 var bodyParser = require('body-parser');
-app.use(bodyParser.urlencoded({ extended: false }));
+var mongoose = require('mongoose');
+var Comments = require('./models/comments');
+var cors = require('cors');
+var jwt = require('jsonwebtoken');
+var User = require('./models/user');
+
+app.use(cors());
+
+//connect to mongoose
+mongoose.connect('mongodb://localhost:27017/comments');
+var db = mongoose.connection;
+
+//create a server
+app.listen(3000);
+
+//get the data from the server
 app.use(bodyParser.json());
 
-//setup path
-var path = require('path');
-app.use(express.static(path.join(__dirname, 'public')));
+//get the data from the server
+app.get('/api/comments', function(req, res){
+	Comments.getComments(function(err, comments){
+		if(err){
+			throw err;
+		}
+		res.json(comments);
+	})
+});
 
-//setup session
-var session = require('express-session');
-app.use(session({
-    secret: 'secret',
-    resave: true,
-    saveUninitialized: true
-}));
+//add a comment
+app.post('/api/comments', function(req, res){
+	var comment = req.body;
+	Comments.addComment(comment, function(err, comment){
+		if(err){
+			throw err;
+		}
+		res.json(comment);
+	})
+});
 
-//setup bcrypt
-var bcrypt = require('bcrypt');
+//delete a comment
+app.delete('/api/comments/:_id', function(req, res){
+	var id = req.params._id;
+	Comments.removeComment(id, function(err, comment){
+		if(err){
+			throw err;
+		}
+		res.json(comment);
+	})
+});
 
-//setup nodemailer
-var nodemailer = require('nodemailer');
+//update a comment
+app.put('/api/comments/:_id', function(req, res){
+	var id = req.params._id;
+	var comment = req.body;
+	Comments.updateComment(id, comment, {}, function(err, comment){
+		if(err){
+			throw err;
+		}
+		res.json(comment);
+	})
+});
 
-//setup multer
-var multer = require('multer');
-var upload = multer({dest: 'public/images/'});
+//user registration
+app.post('/api/user', function(req, res){
+	var user = req.body;
+	User.addUser(user, function(err, user){
+		if(err){
+			throw err;
+		}
+		res.json(user);
+	})
+});
 
-//setup fs
-var fs = require('fs');
-
-//setup moment
-var moment = require('moment');
-
-//setup csrf
-var csrf = require('csurf');
-var csrfProtection = csrf({cookie: true});
-
-//setup https
-var https = require('https');
-var key = fs.readFileSync('sslcert/key.pem');
-var cert = fs.readFileSync('sslcert/cert.pem');
-var options = {
-    key: key,
-    cert: cert
-};
-
-//setup port
-var port = 3306;
-
-//setup email transporter
-var transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: '
+//user login
+app.post('/api/login', function(req, res){
+	var user = req.body;
+	User.getUser(user, function(err, user){
+		if(err){
+			throw err;
+		}
+		res.json(user);
+	})
+});
