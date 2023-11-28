@@ -1,83 +1,77 @@
 //create web server
-var express = require('express');
-var app = express();
-var path = require('path');
-var bodyParser = require('body-parser');
-var mongojs = require('mongojs');
-var db = mongojs('commentdb',['commentdb']);
-var mongoose = require('mongoose');
-var Schema = mongoose.Schema;
-var commentSchema = new Schema({
-  title: String,
-  body: String,
-  date: Date
-});
-var Comment = mongoose.model('Comment', commentSchema);
-var date = new Date();
-var dateTime = date.toISOString();
-var port = 3000;
+const express = require('express');
+const router = express.Router();
+//import the comments model
+const Comments = require('../models/comments');
+//import the user model
+const User = require('../models/user');
+//import the passport module
+const passport = require('passport');
+//import the multer module
+const multer = require('multer');
+//import the path module
+const path = require('path');
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(bodyParser.urlencoded({extended: true}));
-app.use(bodyParser.json());
-
-mongoose.connect('mongodb://localhost/commentdb');
-mongoose.connection.once('open', function(){
-  console.log('Connection has been made, now make fireworks...');
-}).on('error', function(error){
-  console.log('Connection error:', error);
-});
-
-app.post('/comment', function(req, res, next){
-  var comment = new Comment({
-    title: req.body.title,
-    body: req.body.body,
-    date: dateTime
-  });
-  comment.save(function(err, comment){
-    if(err){
-      return next(err);
+//configure storage setting
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'public/images/comment');
+    },
+    filename: function (req, file, cb) {
+        //set the file name
+        cb(null, Date.now() + path.extname(file.originalname));
     }
-    res.json(201, comment);
-  });
 });
 
-app.get('/comment', function(req, res, next){
-  Comment.find(function(err, comments){
-    if(err){
-      return next(err);
+//configure upload setting
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 1024 * 1024 * 5 //file size limit to 5MB
+    },
+    fileFilter: function (req, file, cb) {
+        //check the file type
+        if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png') {
+            cb(null, true); //accept the file
+        } else {
+            cb(null, false); //reject the file
+        }
     }
-    res.json(comments);
-  });
 });
 
-app.get('/comment/:id', function(req, res, next){
-  Comment.findById(req.params.id, function(err, comment){
-    if(err){
-      return next(err);
+//configure the route to get the comments page
+router.get('/', (req, res) => {
+    //check the user login status
+    if (req.isAuthenticated()) {
+        //find all comments
+        Comments.find((err, data) => {
+            if (err) throw err;
+            //find the user information
+            User.findOne({
+                username: req.user.username
+            }, (err, user) => {
+                if (err) throw err;
+                //render the comments page
+                res.render('comments', {
+                    title: 'Comments',
+                    user: user,
+                    comments: data
+                });
+            });
+        });
+    } else {
+        //redirect to the login page
+        res.redirect('/login');
     }
-    res.json(comment);
-  });
 });
 
-app.put('/comment/:id', function(req, res, next){
-  Comment.findByIdAndUpdate(req.params.id, req.body, function(err, comment){
-    if(err){
-      return next(err);
-    }
-    res.json(comment);
-  });
-});
-
-app.delete('/comment/:id', function(req, res, next){
-  Comment.findByIdAndRemove(req.params.id, req.body, function(err, comment){
-    if(err){
-      return next(err);
-    }
-    res.json(comment);
-  });
-});
-
-app.listen(port, function(){
-  console.log('Server is running on port ' + port);
-});
+//configure the route to get the add comment page
+router.get('/add', (req, res) => {
+    //check the user login status
+    if (req.isAuthenticated()) {
+        //find the user information
+        User.findOne({
+            username: req.user.username
+        }, (err, user) => {
+            if (err) throw err;
+            //render the add comment
