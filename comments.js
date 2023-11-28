@@ -1,77 +1,77 @@
 //create web server
-const express = require('express');
-const router = express.Router();
-//import the comments model
-const Comments = require('../models/comments');
-//import the user model
-const User = require('../models/user');
-//import the passport module
-const passport = require('passport');
-//import the multer module
-const multer = require('multer');
-//import the path module
-const path = require('path');
+var express = require('express');
+var app = express();
+var server = require('http').createServer(app);
 
-//configure storage setting
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'public/images/comment');
-    },
-    filename: function (req, file, cb) {
-        //set the file name
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
+//setup socket.io
+var io = require('socket.io').listen(server);
+
+//setup mysql
+var mysql = require("mysql");
+var pool = mysql.createPool({
+    connectionLimit: 10,
+    host: "classmysql.engr.oregonstate.edu",
+    user: "cs290_koehlert",
+    password: "3306",
+    database: "cs290_koehlert"
 });
 
-//configure upload setting
-const upload = multer({
-    storage: storage,
-    limits: {
-        fileSize: 1024 * 1024 * 5 //file size limit to 5MB
-    },
-    fileFilter: function (req, file, cb) {
-        //check the file type
-        if (file.mimetype == 'image/jpeg' || file.mimetype == 'image/png') {
-            cb(null, true); //accept the file
-        } else {
-            cb(null, false); //reject the file
-        }
-    }
-});
+//setup handlebars
+var handlebars = require('express-handlebars').create({defaultLayout: 'main'});
+app.engine('handlebars', handlebars.engine);
+app.set('view engine', 'handlebars');
 
-//configure the route to get the comments page
-router.get('/', (req, res) => {
-    //check the user login status
-    if (req.isAuthenticated()) {
-        //find all comments
-        Comments.find((err, data) => {
-            if (err) throw err;
-            //find the user information
-            User.findOne({
-                username: req.user.username
-            }, (err, user) => {
-                if (err) throw err;
-                //render the comments page
-                res.render('comments', {
-                    title: 'Comments',
-                    user: user,
-                    comments: data
-                });
-            });
-        });
-    } else {
-        //redirect to the login page
-        res.redirect('/login');
-    }
-});
+//setup body-parser
+var bodyParser = require('body-parser');
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
 
-//configure the route to get the add comment page
-router.get('/add', (req, res) => {
-    //check the user login status
-    if (req.isAuthenticated()) {
-        //find the user information
-        User.findOne({
-            username: req.user.username
-        }, (err, user) => {
-            if (err) throw err;
-            //render the add comment
+//setup path
+var path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
+
+//setup session
+var session = require('express-session');
+app.use(session({
+    secret: 'secret',
+    resave: true,
+    saveUninitialized: true
+}));
+
+//setup bcrypt
+var bcrypt = require('bcrypt');
+
+//setup nodemailer
+var nodemailer = require('nodemailer');
+
+//setup multer
+var multer = require('multer');
+var upload = multer({dest: 'public/images/'});
+
+//setup fs
+var fs = require('fs');
+
+//setup moment
+var moment = require('moment');
+
+//setup csrf
+var csrf = require('csurf');
+var csrfProtection = csrf({cookie: true});
+
+//setup https
+var https = require('https');
+var key = fs.readFileSync('sslcert/key.pem');
+var cert = fs.readFileSync('sslcert/cert.pem');
+var options = {
+    key: key,
+    cert: cert
+};
+
+//setup port
+var port = 3306;
+
+//setup email transporter
+var transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: '
